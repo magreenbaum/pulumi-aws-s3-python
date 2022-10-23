@@ -1,0 +1,17 @@
+[tool.poetry]
+name = "complete"
+version = "0.1.0"
+description = "Example"
+authors = ["magreenbaum <magreenbaum>"]
+license = "MIT"
+readme = "README.md"
+
+[tool.poetry.dependencies]
+python = "^3.10"
+s3 = {path = "../../modules"}
+pulumi-aws = "^5.18.0"
+
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"

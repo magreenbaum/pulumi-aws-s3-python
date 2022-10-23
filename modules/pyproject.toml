@@ -1,0 +1,17 @@
+[tool.poetry]
+name = "s3"
+version = "0.1.0"
+description = "A Pulumi python module to create AWS s3 resources."
+authors = ["magreenbaum <magreenbaum>"]
+license = "MIT"
+readme = "README.md"
+
+[tool.poetry.dependencies]
+python = "^3.10"
+pulumi = "^3.43.1"
+pulumi-aws = "^5.18.0"
+
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"

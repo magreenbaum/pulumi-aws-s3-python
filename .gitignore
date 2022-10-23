@@ -1,0 +1,11 @@
+Pulumi.yaml
+Pulumi.*.yaml
+.pulumi/
+
+*.iml
+.vscode/
+
+*.pyc
+venv/
+
+__pycache__
