@@ -5,7 +5,10 @@ from pulumi_aws import s3
 class S3Args:
     def __init__(self,
                  tags: Mapping[str, str],
-                 bucket: str,
+                 bucket: str = None,
+                 bucket_prefix: str = None,
+                 force_destroy: bool = False,
+                 object_lock_enabled: bool = False,
                  acl: str = "private",
                  sse_algorithm: str = None,
                  block_public_acls: bool = True,
@@ -16,12 +19,16 @@ class S3Args:
                  kms_key_id: str = None,
                  mfa: str = None,
                  versioning_status: str = "Enabled",
+                 versioning_mfa_delete: str = "Disabled",
                  target_bucket: str = None,
                  target_prefix: str = None):
 
         # Bucket
-        self.tags = tags
         self.bucket = bucket
+        self.bucket_prefix = bucket_prefix
+        self.force_destroy = force_destroy
+        self.object_lock_enabled = object_lock_enabled
+        self.tags = tags
 
         # ACL
         self.acl = acl
@@ -40,6 +47,7 @@ class S3Args:
         # Versioning
         self.mfa = mfa
         self.versioning_status = versioning_status
+        self.versioning_mfa_delete = versioning_mfa_delete
 
         # Logging
         self.target_bucket = target_bucket
@@ -64,6 +72,9 @@ class S3(pulumi.ComponentResource):
         self.s3_bucket = s3.BucketV2(
             f"{resource_name}-bucket",
             bucket=args.bucket,
+            bucket_prefix=args.bucket_prefix,
+            force_destroy=args.force_destroy,
+            object_lock_enabled=args.object_lock_enabled,
             tags=args.tags,
             opts=pulumi.ResourceOptions(
                 parent=self,
@@ -74,6 +85,7 @@ class S3(pulumi.ComponentResource):
             f"{resource_name}-acl",
             bucket=self.s3_bucket.id,
             acl=args.acl,
+            expected_bucket_owner=args.expected_bucket_owner
         )
 
         # Default Encryption
@@ -112,7 +124,8 @@ class S3(pulumi.ComponentResource):
             expected_bucket_owner=args.expected_bucket_owner,
             mfa=args.mfa,
             versioning_configuration=s3.BucketVersioningV2VersioningConfigurationArgs(
-                status=args.versioning_status
+                status=args.versioning_status,
+                mfa_delete=args.versioning_mfa_delete,
             ),
             opts=pulumi.ResourceOptions(
                 parent=self,
