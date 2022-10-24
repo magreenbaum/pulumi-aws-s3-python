@@ -2,6 +2,7 @@ import pulumi
 from typing import Mapping, Sequence
 from pulumi_aws import s3
 
+
 class S3Args:
     def __init__(self,
                  tags: Mapping[str, str],
@@ -21,7 +22,9 @@ class S3Args:
                  versioning_status: str = "Enabled",
                  versioning_mfa_delete: str = "Disabled",
                  target_bucket: str = None,
-                 target_prefix: str = None):
+                 target_prefix: str = None,
+                 lifecycle_status_enabled: bool = False,
+                 lifecycle_rules: Sequence[s3.BucketLifecycleConfigurationV2RuleArgs] = None):
 
         # Bucket
         self.bucket = bucket
@@ -53,10 +56,15 @@ class S3Args:
         self.target_bucket = target_bucket
         self.target_prefix = target_prefix
 
+        # Lifecycle
+        self.lifecycle_status_enabled = lifecycle_status_enabled
+        self.lifecycle_rules = lifecycle_rules
+
 class S3(pulumi.ComponentResource):
     """
     Notes go here
     """
+
     def __init__(self,
                  resource_name: str,
                  args: S3Args,
@@ -78,7 +86,7 @@ class S3(pulumi.ComponentResource):
             tags=args.tags,
             opts=pulumi.ResourceOptions(
                 parent=self,
-        ))
+            ))
 
         # Bucket ACL
         self.acl = s3.BucketAclV2(
@@ -134,15 +142,23 @@ class S3(pulumi.ComponentResource):
 
         # Bucket logging
         if args.target_bucket:
-            s3.BucketLoggingV2(
-            f"{resource_name}-logging",
+            self.logging = s3.BucketLoggingV2(
+                f"{resource_name}-logging",
                 bucket=self.s3_bucket.id,
                 expected_bucket_owner=args.expected_bucket_owner,
                 target_bucket=args.target_bucket,
                 target_prefix=args.target_prefix,
                 opts=pulumi.ResourceOptions(
                     parent=self,
+                )
             )
-        )
+
+        # Bucket Lifecycle Configuration
+        if args.lifecycle_status_enabled:
+            self.lifecycle = s3.BucketLifecycleConfigurationV2(
+                f"{resource_name}-lifecycle-configuration",
+                bucket=self.s3_bucket.id,
+                rules=args.lifecycle_rules
+            )
 
         super().register_outputs({})

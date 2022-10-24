@@ -6,4 +6,24 @@ s3_bucket = S3("pulumi-s3", S3Args(
         "example": "true"
     },
     sse_algorithm="AES256",
+    lifecycle_status_enabled=True,
+    lifecycle_rules=[
+        {
+            "id": "lifecycle",
+            "status": "Enabled",
+            "noncurrent_version_expiration": {
+                "noncurrent_days": 2
+            }
+        },
+        {
+            "id": "lifecycle2",
+            "status": "Disabled",
+            "abort_incomplete_multipart_upload": {
+                "days_after_initiation": 7
+            },
+            "expiration": {
+                "days": 30
+            }
+        }
+    ]
 ))
