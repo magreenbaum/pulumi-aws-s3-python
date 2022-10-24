@@ -24,7 +24,8 @@ class S3Args:
                  target_bucket: str = None,
                  target_prefix: str = None,
                  lifecycle_status_enabled: bool = False,
-                 lifecycle_rules: Sequence[s3.BucketLifecycleConfigurationV2RuleArgs] = None):
+                 lifecycle_rules: Sequence[s3.BucketLifecycleConfigurationV2RuleArgs] = None,
+                 cors_rules: Sequence[s3.BucketCorsConfigurationV2CorsRuleArgs] = None):
 
         # Bucket
         self.bucket = bucket
@@ -59,6 +60,9 @@ class S3Args:
         # Lifecycle
         self.lifecycle_status_enabled = lifecycle_status_enabled
         self.lifecycle_rules = lifecycle_rules
+
+        # CORS
+        self.cors_rules = cors_rules
 
 class S3(pulumi.ComponentResource):
     """
@@ -160,5 +164,15 @@ class S3(pulumi.ComponentResource):
                 bucket=self.s3_bucket.id,
                 rules=args.lifecycle_rules
             )
+
+        # Bucket CORS Configuration
+        if args.cors_rules != None:
+            self.cors = s3.BucketCorsConfigurationV2(
+                f"{resource_name}-cors-configuration",
+                bucket=self.s3_bucket.id,
+                expected_bucket_owner=args.expected_bucket_owner,
+                cors_rules=args.cors_rules
+            )
+
 
         super().register_outputs({})
