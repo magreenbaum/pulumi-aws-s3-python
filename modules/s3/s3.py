@@ -27,7 +27,10 @@ class S3Args:
                  lifecycle_rules: Sequence[s3.BucketLifecycleConfigurationV2RuleArgs] = None,
                  cors_rules: Sequence[s3.BucketCorsConfigurationV2CorsRuleArgs] = None,
                  object_lock_configuration: list = None,
-                 website: list = None):
+                 accelerate_configuration_enabled: str = "Disabled",
+                 request_payment_configuration_payer: str = None,
+                 website: list = None,
+                 bucket_policy: str = None):
 
         # Bucket
         self.bucket = bucket
@@ -69,8 +72,17 @@ class S3Args:
         # Object Lock
         self.object_lock_configuration = object_lock_configuration
 
+        # Accelerate
+        self.accelerate_configuration_enabled = accelerate_configuration_enabled
+
+        # Request Payment
+        self.request_payment_configuration_payer = request_payment_configuration_payer
+
         # Website
         self.website = website
+
+        # Policy
+        self.bucket_policy = bucket_policy
 
 class S3(pulumi.ComponentResource):
 
@@ -171,7 +183,7 @@ class S3(pulumi.ComponentResource):
             )
 
         # Bucket CORS Configuration
-        if args.cors_rules != None:
+        if args.cors_rules is not None:
             self.cors = s3.BucketCorsConfigurationV2(
                 f"{resource_name}-cors-configuration",
                 bucket=self.s3_bucket.id,
@@ -193,6 +205,24 @@ class S3(pulumi.ComponentResource):
                     ),
                 ),
                 token=args.object_lock_configuration[0].get('token', None)
+            )
+
+        # Accelerate Configuration
+        if args.accelerate_configuration_enabled == 'Enabled':
+            self.accelerate_configuration = s3.BucketAccelerateConfigurationV2(
+                f"{resource_name}-accelerate-configuration",
+                bucket=self.s3_bucket.id,
+                expected_bucket_owner=args.expected_bucket_owner,
+                status=args.accelerate_configuration_enabled
+            )
+
+        # Request Payment configuration
+        if args.request_payment_configuration_payer is not None:
+            self.request_payment_configuration = s3.BucketRequestPaymentConfigurationV2(
+                f"{resource_name}-request-payment-configuration",
+                bucket=self.s3_bucket.id,
+                expected_bucket_owner=args.expected_bucket_owner,
+                payer=args.request_payment_configuration_payer
             )
 
         # Website Configuration
@@ -220,6 +250,14 @@ class S3(pulumi.ComponentResource):
                     host_name=args.website[0].get('host_name', None),
                     protocol=args.website[0].get('protocol', None)
                 )
+            )
+
+        # Policy
+        if args.bucket_policy is not None:
+            self.policy = s3.BucketPolicy(
+                f"{resource_name}-policy",
+                bucket=self.s3_bucket.id,
+                policy=args.bucket_policy
             )
 
         super().register_outputs({})
