@@ -31,7 +31,9 @@ class S3Args:
                  request_payment_configuration_payer: str = None,
                  website: list = None,
                  bucket_policy: str = None,
-                 intelligent_tiering_configuration: list = None):
+                 intelligent_tiering_configuration: list = None,
+                 object_ownership: str = None,
+                 replication_configuration: list = None):
 
         # Bucket
         self.bucket = bucket
@@ -87,6 +89,12 @@ class S3Args:
 
         # Intelligent Tiering
         self.intelligent_tiering_configuration = intelligent_tiering_configuration
+
+        # Ownership Controls
+        self.object_ownership = object_ownership
+
+        # Replication
+        self.replication_configuration = replication_configuration
 
 class S3(pulumi.ComponentResource):
 
@@ -195,6 +203,7 @@ class S3(pulumi.ComponentResource):
                 cors_rules=args.cors_rules
             )
 
+        # Object Lock Configuration
         if args.object_lock_enabled is True:
             self.object_lock_configuration = s3.BucketObjectLockConfigurationV2(
                 f"{resource_name}-object-lock-configuration",
@@ -276,6 +285,26 @@ class S3(pulumi.ComponentResource):
                 name=args.intelligent_tiering_configuration[0].get('name', ''),
                 status=args.intelligent_tiering_configuration[0].get('status', None),
                 tierings=args.intelligent_tiering_configuration[0].get('tierings', None)
+            )
+
+        # Ownership Controls
+        if args.object_ownership is not None:
+            self.ownership_controls = s3.BucketOwnershipControls(
+                f"{resource_name}-ownership-controls",
+                bucket=self.s3_bucket.id,
+                rule=s3.BucketOwnershipControlsRuleArgs(
+                    object_ownership=args.object_ownership
+                )
+            )
+
+        # Replication Configuration
+        if args.replication_configuration is not None:
+            self.replication_configuration = s3.BucketReplicationConfig(
+                f"{resource_name}-replication-configuration",
+                bucket=self.s3_bucket.id,
+                role=args.replication_configuration[0].get('role', ''),
+                rules=args.replication_configuration[0].get('rules', []),
+                token=args.replication_configuration[0].get('token', None)
             )
 
         super().register_outputs({})
