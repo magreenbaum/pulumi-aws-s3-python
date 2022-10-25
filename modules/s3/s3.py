@@ -25,7 +25,9 @@ class S3Args:
                  target_prefix: str = None,
                  lifecycle_status_enabled: bool = False,
                  lifecycle_rules: Sequence[s3.BucketLifecycleConfigurationV2RuleArgs] = None,
-                 cors_rules: Sequence[s3.BucketCorsConfigurationV2CorsRuleArgs] = None):
+                 cors_rules: Sequence[s3.BucketCorsConfigurationV2CorsRuleArgs] = None,
+                 object_lock_configuration: list = None,
+                 website: list = None):
 
         # Bucket
         self.bucket = bucket
@@ -64,10 +66,13 @@ class S3Args:
         # CORS
         self.cors_rules = cors_rules
 
+        # Object Lock
+        self.object_lock_configuration = object_lock_configuration
+
+        # Website
+        self.website = website
+
 class S3(pulumi.ComponentResource):
-    """
-    Notes go here
-    """
 
     def __init__(self,
                  resource_name: str,
@@ -174,5 +179,47 @@ class S3(pulumi.ComponentResource):
                 cors_rules=args.cors_rules
             )
 
+        if args.object_lock_enabled is True:
+            self.object_lock_configuration = s3.BucketObjectLockConfigurationV2(
+                f"{resource_name}-object-lock-configuration",
+                bucket=self.s3_bucket.id,
+                expected_bucket_owner=args.expected_bucket_owner,
+                object_lock_enabled="Enabled",
+                rule=s3.BucketObjectLockConfigurationV2RuleArgs(
+                    default_retention=s3.BucketObjectLockConfigurationV2RuleDefaultRetentionArgs(
+                        days=args.object_lock_configuration[0].get('days', None),
+                        mode=args.object_lock_configuration[0].get('mode', None),
+                        years=args.object_lock_configuration[0].get('years', None)
+                    ),
+                ),
+                token=args.object_lock_configuration[0].get('token', None)
+            )
+
+        # Website Configuration
+        # Not really sure if this is a good way to do this
+        if args.website[0].get('error_document') != '':
+            self.website_configuration = s3.BucketWebsiteConfigurationV2(
+                f"{resource_name}-website-configuration",
+                bucket=self.s3_bucket.id,
+                expected_bucket_owner=args.expected_bucket_owner,
+                error_document=s3.BucketWebsiteConfigurationV2ErrorDocumentArgs(
+                    key=args.website[0].get('error_document', None)
+                ),
+                index_document=s3.BucketWebsiteConfigurationV2IndexDocumentArgs(
+                    suffix=args.website[0].get('index_document', None)
+                ),
+                routing_rules=args.website[0].get('routing_rules', None),
+                routing_rule_details=args.website[0].get('routing_rule_details', None)
+            )
+        else:
+            self.website_configuration = s3.BucketWebsiteConfigurationV2(
+                f"{resource_name}-website-configuration",
+                bucket=self.s3_bucket.id,
+                expected_bucket_owner=args.expected_bucket_owner,
+                redirect_all_requests_to=s3.BucketWebsiteConfigurationV2RedirectAllRequestsTo(
+                    host_name=args.website[0].get('host_name', None),
+                    protocol=args.website[0].get('protocol', None)
+                )
+            )
 
         super().register_outputs({})

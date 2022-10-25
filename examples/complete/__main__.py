@@ -25,5 +25,19 @@ s3_bucket = S3("pulumi-s3", S3Args(
                 "days": 30
             }
         }
+    ],
+    object_lock_enabled=True,
+    object_lock_configuration=[
+        {
+            "mode": "GOVERNANCE",
+            "years": 1
+        }
+    ],
+    # This needs further testing
+    website=[
+        {
+            "error_document": "error.html",
+            "index_document": "index.html"
+        }
     ]
 ))
