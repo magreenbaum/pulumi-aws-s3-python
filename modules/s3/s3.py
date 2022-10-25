@@ -33,7 +33,9 @@ class S3Args:
                  bucket_policy: str = None,
                  intelligent_tiering_configuration: list = None,
                  object_ownership: str = None,
-                 replication_configuration: list = None):
+                 replication_configuration: list = None,
+                 metric_configuration: list = None,
+                 analytics_configuration: list = None):
 
         # Bucket
         self.bucket = bucket
@@ -95,6 +97,12 @@ class S3Args:
 
         # Replication
         self.replication_configuration = replication_configuration
+
+        # Metrics
+        self.metric_configuration = metric_configuration
+
+        # Analytics
+        self.analytics_configuration = analytics_configuration
 
 class S3(pulumi.ComponentResource):
 
@@ -305,6 +313,43 @@ class S3(pulumi.ComponentResource):
                 role=args.replication_configuration[0].get('role', ''),
                 rules=args.replication_configuration[0].get('rules', []),
                 token=args.replication_configuration[0].get('token', None)
+            )
+
+        # Metric Configuration
+        if args.metric_configuration is not None:
+            self.metrics = s3.BucketMetric(
+                f"{resource_name}-metrics",
+                bucket=self.s3_bucket.id,
+                filter=s3.BucketMetricFilterArgs(
+                    prefix=args.metric_configuration[0].get('filter_prefix', None),
+                    tags=args.metric_configuration[0].get('tags', {})
+                ),
+                name=args.metric_configuration[0].get('name', None)
+            )
+
+        # Analytics Configuration
+        if args.analytics_configuration is not None:
+            self.analytics = s3.AnalyticsConfiguration(
+                f"{resource_name}-analytics-configuration",
+                bucket=self.s3_bucket.id,
+                filter=s3.AnalyticsConfigurationFilterArgs(
+                    prefix=args.analytics_configuration[0].get('filter_prefix', None),
+                    tags=args.analytics_configuration[0].get('tags', {})
+                ),
+                name=args.analytics_configuration[0].get('name', None),
+                storage_class_analysis=s3.AnalyticsConfigurationStorageClassAnalysisArgs(
+                    data_export=s3.AnalyticsConfigurationStorageClassAnalysisDataExportArgs(
+                        output_schema_version=args.analytics_configuration[0].get('data_export_output_schema_version', None),
+                        destination=s3.AnalyticsConfigurationStorageClassAnalysisDataExportDestinationArgs(
+                            s3_bucket_destination=s3.AnalyticsConfigurationStorageClassAnalysisDataExportDestinationS3BucketDestinationArgs(
+                                bucket_arn=args.analytics_configuration[0].get('data_export_bucket_arn', None),
+                                bucket_account_id=args.analytics_configuration[0].get('data_export_bucket_account_id', None),
+                                format=args.analytics_configuration[0].get('data_export_bucket_destination_format', None),
+                                prefix=args.analytics_configuration[0].get('data_export_bucket_destination_prefix', None),
+                            )
+                        )
+                    )
+                )
             )
 
         super().register_outputs({})
