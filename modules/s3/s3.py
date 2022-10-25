@@ -35,7 +35,8 @@ class S3Args:
                  object_ownership: str = None,
                  replication_configuration: list = None,
                  metric_configuration: list = None,
-                 analytics_configuration: list = None):
+                 analytics_configuration: list = None,
+                 inventory_configuration: list = None):
 
         # Bucket
         self.bucket = bucket
@@ -103,6 +104,9 @@ class S3Args:
 
         # Analytics
         self.analytics_configuration = analytics_configuration
+
+        # Inventory
+        self.inventory_configuration = inventory_configuration
 
 class S3(pulumi.ComponentResource):
 
@@ -350,6 +354,37 @@ class S3(pulumi.ComponentResource):
                         )
                     )
                 )
+            )
+
+        if args.inventory_configuration is not None:
+            self.inventory = s3.Inventory(
+                f"{resource_name}-inventory-configuration",
+                bucket=args.inventory_configuration[0].get('source', self.s3_bucket.id),
+                destination=s3.InventoryDestinationArgs(
+                    bucket=s3.InventoryDestinationBucketArgs(
+                        bucket_arn=args.inventory_configuration[0].get('destination', self.s3_bucket.arn),
+                        format=args.inventory_configuration[0].get('destination_format', None),
+                        account_id=args.inventory_configuration[0].get('destination_account_id', None),
+                        encryption=s3.InventoryDestinationBucketEncryptionArgs(
+                            sse_kms=s3.InventoryDestinationBucketEncryptionSseKmsArgs(
+                                key_id=args.inventory_configuration[0].get('destination_kms_key_id', None)
+                            ),
+                            sse_s3=s3.InventoryDestinationBucketEncryptionSseS3Args(
+
+                            )
+                        )
+                    )
+                ),
+                included_object_versions=args.inventory_configuration[0].get('included_object_versions', 'All'),
+                schedule=s3.InventoryScheduleArgs(
+                    frequency=args.inventory_configuration[0].get('schedule_frequency', None),
+                ),
+                enabled=True,
+                filter=s3.InventoryFilterArgs(
+                    prefix=args.inventory_configuration[0].get('filter_prefix', None),
+                ),
+                name=args.inventory_configuration[0].get('name', None),
+                optional_fields=args.inventory_configuration[0].get('optional_fields', None)
             )
 
         super().register_outputs({})
