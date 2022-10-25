@@ -30,7 +30,8 @@ class S3Args:
                  accelerate_configuration_enabled: str = "Disabled",
                  request_payment_configuration_payer: str = None,
                  website: list = None,
-                 bucket_policy: str = None):
+                 bucket_policy: str = None,
+                 intelligent_tiering_configuration: list = None):
 
         # Bucket
         self.bucket = bucket
@@ -83,6 +84,9 @@ class S3Args:
 
         # Policy
         self.bucket_policy = bucket_policy
+
+        # Intelligent Tiering
+        self.intelligent_tiering_configuration = intelligent_tiering_configuration
 
 class S3(pulumi.ComponentResource):
 
@@ -258,6 +262,20 @@ class S3(pulumi.ComponentResource):
                 f"{resource_name}-policy",
                 bucket=self.s3_bucket.id,
                 policy=args.bucket_policy
+            )
+
+        # Intelligent Tiering
+        if args.intelligent_tiering_configuration is not None:
+            self.intelligent_tiering = s3.BucketIntelligentTieringConfiguration(
+                f"{resource_name}-intelligent-tiering",
+                bucket=self.s3_bucket.id,
+                filter=s3.BucketIntelligentTieringConfigurationFilterArgs(
+                    prefix=args.intelligent_tiering_configuration[0].get('filter_prefix', ''),
+                    tags=args.intelligent_tiering_configuration[0].get('filter_tags', {})
+                ),
+                name=args.intelligent_tiering_configuration[0].get('name', ''),
+                status=args.intelligent_tiering_configuration[0].get('status', None),
+                tierings=args.intelligent_tiering_configuration[0].get('tierings', None)
             )
 
         super().register_outputs({})

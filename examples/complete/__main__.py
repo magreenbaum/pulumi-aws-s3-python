@@ -39,5 +39,21 @@ s3_bucket = S3("pulumi-s3", S3Args(
             "error_document": "error.html",
             "index_document": "index.html"
         }
+    ],
+    intelligent_tiering_configuration=[
+        {
+            "name": "test",
+            "status": "Enabled",
+            "tierings": [
+                {
+                    "access_tier": "ARCHIVE_ACCESS",
+                    "days": 20
+                },
+                {
+                    "access_tier": "DEEP_ARCHIVE_ACCESS",
+                    "days": 30
+                }
+            ]
+        }
     ]
 ))
