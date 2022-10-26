@@ -19,7 +19,7 @@ class S3Args:
                  expected_bucket_owner: str = None,
                  kms_key_id: str = None,
                  mfa: str = None,
-                 versioning_status: str = "Enabled",
+                 versioning_status: str = None,
                  versioning_mfa_delete: str = "Disabled",
                  target_bucket: str = None,
                  target_prefix: str = None,
@@ -138,24 +138,28 @@ class S3(pulumi.ComponentResource):
             f"{resource_name}-acl",
             bucket=self.s3_bucket.id,
             acl=args.acl,
-            expected_bucket_owner=args.expected_bucket_owner
-        )
-
-        # Default Encryption
-        self.default_encryption = s3.BucketServerSideEncryptionConfigurationV2(
-            f"{resource_name}-encryption",
-            bucket=self.s3_bucket.id,
             expected_bucket_owner=args.expected_bucket_owner,
-            rules=[s3.BucketServerSideEncryptionConfigurationV2RuleArgs(
-                apply_server_side_encryption_by_default=s3.BucketServerSideEncryptionConfigurationV2RuleApplyServerSideEncryptionByDefaultArgs(
-                    kms_master_key_id=args.kms_key_id,
-                    sse_algorithm=args.sse_algorithm,
-                ))
-            ],
             opts=pulumi.ResourceOptions(
                 parent=self,
             )
         )
+
+        # Default Encryption
+        if args.sse_algorithm is not None:
+            self.default_encryption = s3.BucketServerSideEncryptionConfigurationV2(
+                f"{resource_name}-encryption",
+                bucket=self.s3_bucket.id,
+                expected_bucket_owner=args.expected_bucket_owner,
+                rules=[s3.BucketServerSideEncryptionConfigurationV2RuleArgs(
+                    apply_server_side_encryption_by_default=s3.BucketServerSideEncryptionConfigurationV2RuleApplyServerSideEncryptionByDefaultArgs(
+                        kms_master_key_id=args.kms_key_id,
+                        sse_algorithm=args.sse_algorithm,
+                    ))
+                ],
+                opts=pulumi.ResourceOptions(
+                    parent=self,
+                )
+            )
 
         # Public Access Block
         self.public_access_block = s3.BucketPublicAccessBlock(
@@ -171,19 +175,20 @@ class S3(pulumi.ComponentResource):
         )
 
         # Bucket Versioning
-        self.versioning = s3.BucketVersioningV2(
-            f"{resource_name}-versioning",
-            bucket=self.s3_bucket.id,
-            expected_bucket_owner=args.expected_bucket_owner,
-            mfa=args.mfa,
-            versioning_configuration=s3.BucketVersioningV2VersioningConfigurationArgs(
-                status=args.versioning_status,
-                mfa_delete=args.versioning_mfa_delete,
-            ),
-            opts=pulumi.ResourceOptions(
-                parent=self,
+        if args.versioning_status is not None:
+            self.versioning = s3.BucketVersioningV2(
+                f"{resource_name}-versioning",
+                bucket=self.s3_bucket.id,
+                expected_bucket_owner=args.expected_bucket_owner,
+                mfa=args.mfa,
+                versioning_configuration=s3.BucketVersioningV2VersioningConfigurationArgs(
+                    status=args.versioning_status,
+                    mfa_delete=args.versioning_mfa_delete,
+                ),
+                opts=pulumi.ResourceOptions(
+                    parent=self,
+                )
             )
-        )
 
         # Bucket logging
         if args.target_bucket:
@@ -203,7 +208,10 @@ class S3(pulumi.ComponentResource):
             self.lifecycle = s3.BucketLifecycleConfigurationV2(
                 f"{resource_name}-lifecycle-configuration",
                 bucket=self.s3_bucket.id,
-                rules=args.lifecycle_rules
+                rules=args.lifecycle_rules,
+                opts=pulumi.ResourceOptions(
+                    parent=self
+                )
             )
 
         # Bucket CORS Configuration
@@ -212,7 +220,10 @@ class S3(pulumi.ComponentResource):
                 f"{resource_name}-cors-configuration",
                 bucket=self.s3_bucket.id,
                 expected_bucket_owner=args.expected_bucket_owner,
-                cors_rules=args.cors_rules
+                cors_rules=args.cors_rules,
+                opts=pulumi.ResourceOptions(
+                    parent=self
+                )
             )
 
         # Object Lock Configuration
@@ -229,7 +240,10 @@ class S3(pulumi.ComponentResource):
                         years=args.object_lock_configuration[0].get('years', None)
                     ),
                 ),
-                token=args.object_lock_configuration[0].get('token', None)
+                token=args.object_lock_configuration[0].get('token', None),
+                opts=pulumi.ResourceOptions(
+                    parent=self
+                )
             )
 
         # Accelerate Configuration
@@ -238,7 +252,10 @@ class S3(pulumi.ComponentResource):
                 f"{resource_name}-accelerate-configuration",
                 bucket=self.s3_bucket.id,
                 expected_bucket_owner=args.expected_bucket_owner,
-                status=args.accelerate_configuration_enabled
+                status=args.accelerate_configuration_enabled,
+                opts=pulumi.ResourceOptions(
+                    parent=self
+                )
             )
 
         # Request Payment configuration
@@ -247,7 +264,10 @@ class S3(pulumi.ComponentResource):
                 f"{resource_name}-request-payment-configuration",
                 bucket=self.s3_bucket.id,
                 expected_bucket_owner=args.expected_bucket_owner,
-                payer=args.request_payment_configuration_payer
+                payer=args.request_payment_configuration_payer,
+                opts=pulumi.ResourceOptions(
+                    parent=self
+                )
             )
 
         # Website Configuration
@@ -264,7 +284,10 @@ class S3(pulumi.ComponentResource):
                     suffix=args.website[0].get('index_document', None)
                 ),
                 routing_rules=args.website[0].get('routing_rules', None),
-                routing_rule_details=args.website[0].get('routing_rule_details', None)
+                routing_rule_details=args.website[0].get('routing_rule_details', None),
+                opts=pulumi.ResourceOptions(
+                    parent=self
+                )
             )
         else:
             self.website_configuration = s3.BucketWebsiteConfigurationV2(
@@ -274,6 +297,9 @@ class S3(pulumi.ComponentResource):
                 redirect_all_requests_to=s3.BucketWebsiteConfigurationV2RedirectAllRequestsTo(
                     host_name=args.website[0].get('host_name', None),
                     protocol=args.website[0].get('protocol', None)
+                ),
+                opts=pulumi.ResourceOptions(
+                    parent=self
                 )
             )
 
@@ -282,7 +308,10 @@ class S3(pulumi.ComponentResource):
             self.policy = s3.BucketPolicy(
                 f"{resource_name}-policy",
                 bucket=self.s3_bucket.id,
-                policy=args.bucket_policy
+                policy=args.bucket_policy,
+                opts=pulumi.ResourceOptions(
+                    parent=self
+                )
             )
 
         # Intelligent Tiering
@@ -296,7 +325,10 @@ class S3(pulumi.ComponentResource):
                 ),
                 name=args.intelligent_tiering_configuration[0].get('name', ''),
                 status=args.intelligent_tiering_configuration[0].get('status', None),
-                tierings=args.intelligent_tiering_configuration[0].get('tierings', None)
+                tierings=args.intelligent_tiering_configuration[0].get('tierings', None),
+                opts=pulumi.ResourceOptions(
+                    parent=self
+                )
             )
 
         # Ownership Controls
@@ -306,6 +338,9 @@ class S3(pulumi.ComponentResource):
                 bucket=self.s3_bucket.id,
                 rule=s3.BucketOwnershipControlsRuleArgs(
                     object_ownership=args.object_ownership
+                ),
+                opts=pulumi.ResourceOptions(
+                    parent=self
                 )
             )
 
@@ -316,7 +351,10 @@ class S3(pulumi.ComponentResource):
                 bucket=self.s3_bucket.id,
                 role=args.replication_configuration[0].get('role', ''),
                 rules=args.replication_configuration[0].get('rules', []),
-                token=args.replication_configuration[0].get('token', None)
+                token=args.replication_configuration[0].get('token', None),
+                opts=pulumi.ResourceOptions(
+                    parent=self
+                )
             )
 
         # Metric Configuration
@@ -328,7 +366,10 @@ class S3(pulumi.ComponentResource):
                     prefix=args.metric_configuration[0].get('filter_prefix', None),
                     tags=args.metric_configuration[0].get('tags', {})
                 ),
-                name=args.metric_configuration[0].get('name', None)
+                name=args.metric_configuration[0].get('name', None),
+                opts=pulumi.ResourceOptions(
+                    parent=self
+                )
             )
 
         # Analytics Configuration
@@ -353,6 +394,9 @@ class S3(pulumi.ComponentResource):
                             )
                         )
                     )
+                ),
+                opts=pulumi.ResourceOptions(
+                    parent=self
                 )
             )
 
@@ -384,7 +428,10 @@ class S3(pulumi.ComponentResource):
                     prefix=args.inventory_configuration[0].get('filter_prefix', None),
                 ),
                 name=args.inventory_configuration[0].get('name', None),
-                optional_fields=args.inventory_configuration[0].get('optional_fields', None)
+                optional_fields=args.inventory_configuration[0].get('optional_fields', None),
+                opts=pulumi.ResourceOptions(
+                    parent=self
+                )
             )
 
         super().register_outputs({})
