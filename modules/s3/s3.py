@@ -10,7 +10,7 @@ class S3Args:
                  bucket_prefix: str = None,
                  force_destroy: bool = False,
                  object_lock_enabled: bool = False,
-                 acl: str = "private",
+                 acl: str = None,
                  sse_algorithm: str = None,
                  block_public_acls: bool = True,
                  block_public_policy: bool = True,
@@ -134,15 +134,16 @@ class S3(pulumi.ComponentResource):
             ))
 
         # Bucket ACL
-        self.acl = s3.BucketAclV2(
-            f"{resource_name}-acl",
-            bucket=self.s3_bucket.id,
-            acl=args.acl,
-            expected_bucket_owner=args.expected_bucket_owner,
-            opts=pulumi.ResourceOptions(
-                parent=self,
+        if args.acl is not None:
+            self.acl = s3.BucketAclV2(
+                f"{resource_name}-acl",
+                bucket=self.s3_bucket.id,
+                acl=args.acl,
+                expected_bucket_owner=args.expected_bucket_owner,
+                opts=pulumi.ResourceOptions(
+                    parent=self,
+                )
             )
-        )
 
         # Default Encryption
         if args.sse_algorithm is not None:
@@ -272,36 +273,37 @@ class S3(pulumi.ComponentResource):
 
         # Website Configuration
         # Not really sure if this is a good way to do this
-        if args.website[0].get('error_document') != '':
-            self.website_configuration = s3.BucketWebsiteConfigurationV2(
-                f"{resource_name}-website-configuration",
-                bucket=self.s3_bucket.id,
-                expected_bucket_owner=args.expected_bucket_owner,
-                error_document=s3.BucketWebsiteConfigurationV2ErrorDocumentArgs(
-                    key=args.website[0].get('error_document', None)
-                ),
-                index_document=s3.BucketWebsiteConfigurationV2IndexDocumentArgs(
-                    suffix=args.website[0].get('index_document', None)
-                ),
-                routing_rules=args.website[0].get('routing_rules', None),
-                routing_rule_details=args.website[0].get('routing_rule_details', None),
-                opts=pulumi.ResourceOptions(
-                    parent=self
+        if args.website is not None:
+            if args.website[0].get('error_document'):
+                self.website_configuration = s3.BucketWebsiteConfigurationV2(
+                    f"{resource_name}-website-configuration",
+                    bucket=self.s3_bucket.id,
+                    expected_bucket_owner=args.expected_bucket_owner,
+                    error_document=s3.BucketWebsiteConfigurationV2ErrorDocumentArgs(
+                        key=args.website[0].get('error_document', None)
+                    ),
+                    index_document=s3.BucketWebsiteConfigurationV2IndexDocumentArgs(
+                        suffix=args.website[0].get('index_document', None)
+                    ),
+                    routing_rules=args.website[0].get('routing_rules', None),
+                    routing_rule_details=args.website[0].get('routing_rule_details', None),
+                    opts=pulumi.ResourceOptions(
+                        parent=self
+                    )
                 )
-            )
-        else:
-            self.website_configuration = s3.BucketWebsiteConfigurationV2(
-                f"{resource_name}-website-configuration",
-                bucket=self.s3_bucket.id,
-                expected_bucket_owner=args.expected_bucket_owner,
-                redirect_all_requests_to=s3.BucketWebsiteConfigurationV2RedirectAllRequestsTo(
-                    host_name=args.website[0].get('host_name', None),
-                    protocol=args.website[0].get('protocol', None)
-                ),
-                opts=pulumi.ResourceOptions(
-                    parent=self
+            else:
+                self.website_configuration = s3.BucketWebsiteConfigurationV2(
+                    f"{resource_name}-website-configuration",
+                    bucket=self.s3_bucket.id,
+                    expected_bucket_owner=args.expected_bucket_owner,
+                    redirect_all_requests_to=s3.BucketWebsiteConfigurationV2RedirectAllRequestsTo(
+                        host_name=args.website[0].get('host_name', None),
+                        protocol=args.website[0].get('protocol', None)
+                    ),
+                    opts=pulumi.ResourceOptions(
+                        parent=self
+                    )
                 )
-            )
 
         # Policy
         if args.bucket_policy is not None:
