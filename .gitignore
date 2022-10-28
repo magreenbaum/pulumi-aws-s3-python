@@ -4,6 +4,7 @@ Pulumi.*.yaml
 
 *.iml
 .vscode/
+*.idea
 
 *.pyc
 venv/

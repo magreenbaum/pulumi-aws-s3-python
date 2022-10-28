@@ -1,12 +1,13 @@
 import pulumi
 from typing import Mapping, Sequence
+import pulumi_aws as aws
 from pulumi_aws import s3
-
+from pulumi import Output
 
 class S3Args:
     def __init__(self,
-                 tags: Mapping[str, str],
-                 bucket: str = None,
+                 tags: Mapping[str, str] = None,
+                 bucket_name: str = None,
                  bucket_prefix: str = None,
                  force_destroy: bool = False,
                  object_lock_enabled: bool = False,
@@ -18,11 +19,8 @@ class S3Args:
                  restrict_public_buckets: bool = True,
                  expected_bucket_owner: str = None,
                  kms_key_id: str = None,
-                 mfa: str = None,
-                 versioning_status: str = None,
-                 versioning_mfa_delete: str = "Disabled",
-                 target_bucket: str = None,
-                 target_prefix: str = None,
+                 versioning_configuration: list = None,
+                 logging_configuration: list = None,
                  lifecycle_status_enabled: bool = False,
                  lifecycle_rules: Sequence[s3.BucketLifecycleConfigurationV2RuleArgs] = None,
                  cors_rules: Sequence[s3.BucketCorsConfigurationV2CorsRuleArgs] = None,
@@ -30,16 +28,18 @@ class S3Args:
                  accelerate_configuration_enabled: str = "Disabled",
                  request_payment_configuration_payer: str = None,
                  website: list = None,
-                 bucket_policy: str = None,
+                 bucket_policy_configuration: list = None,
+                 bucket_elb_logging: bool = False,
                  intelligent_tiering_configuration: list = None,
                  object_ownership: str = None,
                  replication_configuration: list = None,
                  metric_configuration: list = None,
                  analytics_configuration: list = None,
-                 inventory_configuration: list = None):
+                 inventory_configuration: list = None,
+                 ):
 
         # Bucket
-        self.bucket = bucket
+        self.bucket_name = bucket_name
         self.bucket_prefix = bucket_prefix
         self.force_destroy = force_destroy
         self.object_lock_enabled = object_lock_enabled
@@ -60,13 +60,10 @@ class S3Args:
         self.restrict_public_buckets = restrict_public_buckets
 
         # Versioning
-        self.mfa = mfa
-        self.versioning_status = versioning_status
-        self.versioning_mfa_delete = versioning_mfa_delete
+        self.versioning_configuration = versioning_configuration
 
         # Logging
-        self.target_bucket = target_bucket
-        self.target_prefix = target_prefix
+        self.logging_configuration = logging_configuration
 
         # Lifecycle
         self.lifecycle_status_enabled = lifecycle_status_enabled
@@ -88,7 +85,8 @@ class S3Args:
         self.website = website
 
         # Policy
-        self.bucket_policy = bucket_policy
+        self.bucket_policy_configuration = bucket_policy_configuration
+        self.bucket_elb_logging = bucket_elb_logging
 
         # Intelligent Tiering
         self.intelligent_tiering_configuration = intelligent_tiering_configuration
@@ -118,13 +116,13 @@ class S3(pulumi.ComponentResource):
         super().__init__('S3', resource_name, None, opts)
 
         self.resource_name = resource_name
-        self.bucket_name = args.bucket
+        self.bucket_name = args.bucket_name
         self.tags = args.tags
 
         # s3 bucket
         self.s3_bucket = s3.BucketV2(
             f"{resource_name}-bucket",
-            bucket=args.bucket,
+            bucket=args.bucket_name,
             bucket_prefix=args.bucket_prefix,
             force_destroy=args.force_destroy,
             object_lock_enabled=args.object_lock_enabled,
@@ -176,15 +174,15 @@ class S3(pulumi.ComponentResource):
         )
 
         # Bucket Versioning
-        if args.versioning_status is not None:
+        if args.versioning_configuration is not None:
             self.versioning = s3.BucketVersioningV2(
                 f"{resource_name}-versioning",
                 bucket=self.s3_bucket.id,
                 expected_bucket_owner=args.expected_bucket_owner,
-                mfa=args.mfa,
+                mfa=args.versioning_configuration[0].get('mfa', None),
                 versioning_configuration=s3.BucketVersioningV2VersioningConfigurationArgs(
-                    status=args.versioning_status,
-                    mfa_delete=args.versioning_mfa_delete,
+                    status=args.versioning_configuration[0].get('status', None),
+                    mfa_delete=args.versioning_configuration[0].get('mfa_delete', None),
                 ),
                 opts=pulumi.ResourceOptions(
                     parent=self,
@@ -192,13 +190,13 @@ class S3(pulumi.ComponentResource):
             )
 
         # Bucket logging
-        if args.target_bucket:
+        if args.logging_configuration is not None:
             self.logging = s3.BucketLoggingV2(
                 f"{resource_name}-logging",
                 bucket=self.s3_bucket.id,
                 expected_bucket_owner=args.expected_bucket_owner,
-                target_bucket=args.target_bucket,
-                target_prefix=args.target_prefix,
+                target_bucket=args.logging_configuration[0].get('target_bucket', None),
+                target_prefix=args.logging_configuration[0].get('target_prefix', None),
                 opts=pulumi.ResourceOptions(
                     parent=self,
                 )
@@ -305,17 +303,6 @@ class S3(pulumi.ComponentResource):
                     )
                 )
 
-        # Policy
-        if args.bucket_policy is not None:
-            self.policy = s3.BucketPolicy(
-                f"{resource_name}-policy",
-                bucket=self.s3_bucket.id,
-                policy=args.bucket_policy,
-                opts=pulumi.ResourceOptions(
-                    parent=self
-                )
-            )
-
         # Intelligent Tiering
         if args.intelligent_tiering_configuration is not None:
             self.intelligent_tiering = s3.BucketIntelligentTieringConfiguration(
@@ -411,14 +398,14 @@ class S3(pulumi.ComponentResource):
                         bucket_arn=args.inventory_configuration[0].get('destination', self.s3_bucket.arn),
                         format=args.inventory_configuration[0].get('destination_format', None),
                         account_id=args.inventory_configuration[0].get('destination_account_id', None),
-                        encryption=s3.InventoryDestinationBucketEncryptionArgs(
-                            sse_kms=s3.InventoryDestinationBucketEncryptionSseKmsArgs(
-                                key_id=args.inventory_configuration[0].get('destination_kms_key_id', None)
-                            ),
-                            sse_s3=s3.InventoryDestinationBucketEncryptionSseS3Args(
-
-                            )
-                        )
+                        encryption=args.inventory_configuration[0].get('encryption', None)
+                        # encryption=s3.InventoryDestinationBucketEncryptionArgs(
+                        #     sse_kms=s3.InventoryDestinationBucketEncryptionSseKmsArgs(
+                        #         key_id=args.inventory_configuration[0].get('destination_kms_key_id', None)
+                        #     ),
+                        #     sse_s3=s3.InventoryDestinationBucketEncryptionSseS3Args(
+                        #     )
+                        # )
                     )
                 ),
                 included_object_versions=args.inventory_configuration[0].get('included_object_versions', 'All'),
@@ -429,10 +416,60 @@ class S3(pulumi.ComponentResource):
                 filter=s3.InventoryFilterArgs(
                     prefix=args.inventory_configuration[0].get('filter_prefix', None),
                 ),
-                name=args.inventory_configuration[0].get('name', None),
+                name=args.inventory_configuration[0].get('name', args.inventory_configuration[0].get('schedule_frequency')),
                 optional_fields=args.inventory_configuration[0].get('optional_fields', None),
                 opts=pulumi.ResourceOptions(
                     parent=self
+                )
+            )
+
+        # Standard Bucket Policy Attachments
+        # Allow ELB Logs
+
+        # I don't yet fully understand how Pulumi Outputs work or how to reference them in other resources
+        # For now this seems to work fine
+        self.all_bucket_objects_arn = Output.concat("arn:aws:s3:::", self.s3_bucket.id, "/*")
+        self.bucket_arn = Output.concat("arn:aws:s3:::", self.s3_bucket.id)
+
+        if args.bucket_elb_logging:
+            self.elb_logging_policy = aws.iam.get_policy_document(
+                statements=[
+                    aws.iam.GetPolicyDocumentStatementArgs(
+                        principals=[
+                            aws.iam.GetPolicyDocumentStatementPrincipalArgs(
+                                type="AWS",
+                                identifiers=[
+                                    args.bucket_policy_configuration[0].get('elb_account_id')
+                                ]
+                            )
+                        ],
+                        actions=[
+                            "s3:PutObject"
+                        ],
+                        resources=[
+                            self.all_bucket_objects_arn
+                        ]
+                    )
+                ]
+            )
+
+        if args.bucket_policy_configuration is not None:
+            self.combined_bucket_policy_docs = aws.iam.get_policy_document_output(
+                source_policy_documents=[
+                    args.bucket_policy_configuration[0].get('policy_json', ""),
+                    self.elb_logging_policy.json,
+                ]
+            )
+
+        # Policy
+        if args.bucket_policy_configuration is not None:
+            self.policy = s3.BucketPolicy(
+                f"{resource_name}-policy",
+                bucket=self.s3_bucket.id,
+                policy=self.combined_bucket_policy_docs.json,
+                opts=pulumi.ResourceOptions(
+                    parent=self,
+                    depends_on=self.s3_bucket
                 )
             )
 
