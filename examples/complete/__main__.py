@@ -124,7 +124,6 @@ s3_bucket = S3("pulumi-s3", S3Args(
             "data_export_bucket_arn": "arn:aws:s3:::pulumi-state-maf"
         }
     ],
-    # The encryption portion is not working as desired for this section
     inventory_configuration=[
         {
             "schedule_frequency": "Daily",
