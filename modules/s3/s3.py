@@ -275,38 +275,27 @@ class S3(pulumi.ComponentResource):
             )
 
         # Website Configuration
-        # Not really sure if this is a good way to do this
         if args.website is not None:
-            if args.website[0].get('error_document'):
-                self.website_configuration = s3.BucketWebsiteConfigurationV2(
-                    f"{resource_name}-website-configuration",
-                    bucket=self.s3_bucket.id,
-                    expected_bucket_owner=args.expected_bucket_owner,
-                    error_document=s3.BucketWebsiteConfigurationV2ErrorDocumentArgs(
-                        key=args.website[0].get('error_document', None)
-                    ),
-                    index_document=s3.BucketWebsiteConfigurationV2IndexDocumentArgs(
-                        suffix=args.website[0].get('index_document', None)
-                    ),
-                    routing_rules=args.website[0].get('routing_rules', None),
-                    routing_rule_details=args.website[0].get('routing_rule_details', None),
-                    opts=pulumi.ResourceOptions(
-                        parent=self
-                    )
+            self.website_configuration = s3.BucketWebsiteConfigurationV2(
+                f"{resource_name}-website-configuration",
+                bucket=self.s3_bucket.id,
+                expected_bucket_owner=args.expected_bucket_owner,
+                error_document=s3.BucketWebsiteConfigurationV2ErrorDocumentArgs(
+                    key=args.website[0].get('error_document', None)
+                ) if args.website[0].get('error_document', None) is not None else None,
+                index_document=s3.BucketWebsiteConfigurationV2IndexDocumentArgs(
+                    suffix=args.website[0].get('index_document', None)
+                ),
+                redirect_all_requests_to=s3.BucketWebsiteConfigurationV2RedirectAllRequestsTo(
+                    host_name=args.website[0].get('host_name', None),
+                    protocol=args.website[0].get('protocol', None)
+                ) if args.website[0].get('error_document', None) is None else None,
+                routing_rules=args.website[0].get('routing_rules', None),
+                routing_rule_details=args.website[0].get('routing_rule_details', None),
+                opts=pulumi.ResourceOptions(
+                    parent=self
                 )
-            else:
-                self.website_configuration = s3.BucketWebsiteConfigurationV2(
-                    f"{resource_name}-website-configuration",
-                    bucket=self.s3_bucket.id,
-                    expected_bucket_owner=args.expected_bucket_owner,
-                    redirect_all_requests_to=s3.BucketWebsiteConfigurationV2RedirectAllRequestsTo(
-                        host_name=args.website[0].get('host_name', None),
-                        protocol=args.website[0].get('protocol', None)
-                    ),
-                    opts=pulumi.ResourceOptions(
-                        parent=self
-                    )
-                )
+            )
 
         # Intelligent Tiering
         if args.intelligent_tiering_configuration is not None:
@@ -395,36 +384,39 @@ class S3(pulumi.ComponentResource):
             )
 
         if args.inventory_configuration is not None:
-            self.inventory = s3.Inventory(
-                f"{resource_name}-inventory-configuration",
-                bucket=args.inventory_configuration[0].get('source', self.s3_bucket.id),
-                destination=s3.InventoryDestinationArgs(
-                    bucket=s3.InventoryDestinationBucketArgs(
-                        bucket_arn=args.inventory_configuration[0].get('destination', self.s3_bucket.arn),
-                        format=args.inventory_configuration[0].get('destination_format', None),
-                        account_id=args.inventory_configuration[0].get('destination_account_id', None),
-                        # encryption=s3.InventoryDestinationBucketEncryptionArgs(
-                        #     sse_kms=s3.InventoryDestinationBucketEncryptionSseKmsArgs(
-                        #         key_id=args.inventory_configuration[0].get('destination_kms_key_id', None)
-                        #     ),
-                        #     sse_s3=s3.InventoryDestinationBucketEncryptionSseS3Args()
-                        # )
+            for k in range(len(args.inventory_configuration)):
+                self.inventory = s3.Inventory(
+                    f"{resource_name}-inventory-configuration-{args.inventory_configuration[k].get('schedule_frequency')}",
+                    bucket=args.inventory_configuration[k].get('source', self.s3_bucket.id),
+                    destination=s3.InventoryDestinationArgs(
+                        bucket=s3.InventoryDestinationBucketArgs(
+                            bucket_arn=args.inventory_configuration[k].get('destination', self.s3_bucket.arn),
+                            format=args.inventory_configuration[k].get('destination_format', None),
+                            account_id=args.inventory_configuration[k].get('destination_account_id', None),
+                            encryption=s3.InventoryDestinationBucketEncryptionArgs(
+                                sse_kms=s3.InventoryDestinationBucketEncryptionSseKmsArgs(
+                                    key_id=args.inventory_configuration[k].get('encryption').get("sse_kms_key_id")
+                                ) if args.inventory_configuration[k].get('encryption').get("sse_s3", False) is False else None,
+                                sse_s3=s3.InventoryDestinationBucketEncryptionSseS3Args(
+
+                                ) if args.inventory_configuration[k].get('encryption').get("sse_s3", False) else None
+                            ) if args.inventory_configuration[k].get('encryption', None) else None
+                        )
+                    ),
+                    included_object_versions=args.inventory_configuration[k].get('included_object_versions', 'All'),
+                    schedule=s3.InventoryScheduleArgs(
+                        frequency=args.inventory_configuration[k].get('schedule_frequency', None),
+                    ),
+                    enabled=True,
+                    filter=s3.InventoryFilterArgs(
+                        prefix=args.inventory_configuration[k].get('filter_prefix', None),
+                    ),
+                    name=args.inventory_configuration[k].get('name', args.inventory_configuration[k].get('schedule_frequency')),
+                    optional_fields=args.inventory_configuration[k].get('optional_fields', None),
+                    opts=pulumi.ResourceOptions(
+                        parent=self
                     )
-                ),
-                included_object_versions=args.inventory_configuration[0].get('included_object_versions', 'All'),
-                schedule=s3.InventoryScheduleArgs(
-                    frequency=args.inventory_configuration[0].get('schedule_frequency', None),
-                ),
-                enabled=True,
-                filter=s3.InventoryFilterArgs(
-                    prefix=args.inventory_configuration[0].get('filter_prefix', None),
-                ),
-                name=args.inventory_configuration[0].get('name', args.inventory_configuration[0].get('schedule_frequency')),
-                optional_fields=args.inventory_configuration[0].get('optional_fields', None),
-                opts=pulumi.ResourceOptions(
-                    parent=self
                 )
-            )
 
         # I don't yet fully understand how Pulumi Outputs work or how to reference them in other resources
         # For now this seems to work fine
@@ -567,8 +559,7 @@ class S3(pulumi.ComponentResource):
                 ]
             )
 
-
-        # Policy
+        # Bucket Policy
         if args.bucket_policy_configuration is not None:
             self.policy = s3.BucketPolicy(
                 f"{resource_name}-policy",

@@ -125,14 +125,20 @@ s3_bucket = S3("pulumi-s3", S3Args(
         }
     ],
     # The encryption portion is not working as desired for this section
-    # inventory_configuration=[
-    #     {
-    #         "schedule_frequency": "Daily",
-    #         "destination_format": "CSV"
-    #     },
-    #     {
-    #         "schedule_frequency": "Weekly",
-    #         "destination_format": "CSV"
-    #     }
-    # ]
+    inventory_configuration=[
+        {
+            "schedule_frequency": "Daily",
+            "destination_format": "CSV",
+            "encryption": {
+                "sse_s3": True
+            }
+        },
+        {
+            "schedule_frequency": "Weekly",
+            "destination_format": "CSV",
+            "encryption": {
+                "sse_kms_key_id": key.arn
+            }
+        }
+    ]
 ))
