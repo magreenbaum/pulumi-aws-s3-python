@@ -116,7 +116,6 @@ class S3(pulumi.ComponentResource):
         super().__init__('S3', resource_name, None, opts)
 
         self.resource_name = resource_name
-        self.bucket_name = args.bucket_name
         self.tags = args.tags
 
         # s3 bucket
@@ -398,7 +397,6 @@ class S3(pulumi.ComponentResource):
                         bucket_arn=args.inventory_configuration[0].get('destination', self.s3_bucket.arn),
                         format=args.inventory_configuration[0].get('destination_format', None),
                         account_id=args.inventory_configuration[0].get('destination_account_id', None),
-                        encryption=args.inventory_configuration[0].get('encryption', None)
                         # encryption=s3.InventoryDestinationBucketEncryptionArgs(
                         #     sse_kms=s3.InventoryDestinationBucketEncryptionSseKmsArgs(
                         #         key_id=args.inventory_configuration[0].get('destination_kms_key_id', None)
@@ -428,6 +426,7 @@ class S3(pulumi.ComponentResource):
 
         # I don't yet fully understand how Pulumi Outputs work or how to reference them in other resources
         # For now this seems to work fine
+        self.bucket_name = Output.concat(self.s3_bucket.id, "")
         self.all_bucket_objects_arn = Output.concat("arn:aws:s3:::", self.s3_bucket.id, "/*")
         self.bucket_arn = Output.concat("arn:aws:s3:::", self.s3_bucket.id)
 
