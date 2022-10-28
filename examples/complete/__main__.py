@@ -1,8 +1,6 @@
 from s3 import S3, S3Args
 import pulumi_aws as aws
-from pulumi import Output
 
-current = aws.get_caller_identity()
 s3_canonical_user = aws.s3.get_canonical_user_id()
 
 # Extra resources for example
@@ -35,6 +33,8 @@ s3_logging_bucket = S3("s3-logging-bucket", S3Args(
         }
     ],
     bucket_elb_logging=True,
+    bucket_vpc_flow_logging=True,
+    deny_insecure_transport=True,
     bucket_policy_configuration=[
         {
             # Not sure if Pulumi has a function to get ELB service account, nothing obvious stood out

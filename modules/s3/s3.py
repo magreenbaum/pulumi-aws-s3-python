@@ -1,3 +1,5 @@
+import json
+
 import pulumi
 from typing import Mapping, Sequence
 import pulumi_aws as aws
@@ -30,6 +32,8 @@ class S3Args:
                  website: list = None,
                  bucket_policy_configuration: list = None,
                  bucket_elb_logging: bool = False,
+                 bucket_vpc_flow_logging: bool = False,
+                 deny_insecure_transport: bool = False,
                  intelligent_tiering_configuration: list = None,
                  object_ownership: str = None,
                  replication_configuration: list = None,
@@ -87,6 +91,8 @@ class S3Args:
         # Policy
         self.bucket_policy_configuration = bucket_policy_configuration
         self.bucket_elb_logging = bucket_elb_logging
+        self.bucket_vpc_flow_logging = bucket_vpc_flow_logging
+        self.deny_insecure_transport = deny_insecure_transport
 
         # Intelligent Tiering
         self.intelligent_tiering_configuration = intelligent_tiering_configuration
@@ -401,8 +407,7 @@ class S3(pulumi.ComponentResource):
                         #     sse_kms=s3.InventoryDestinationBucketEncryptionSseKmsArgs(
                         #         key_id=args.inventory_configuration[0].get('destination_kms_key_id', None)
                         #     ),
-                        #     sse_s3=s3.InventoryDestinationBucketEncryptionSseS3Args(
-                        #     )
+                        #     sse_s3=s3.InventoryDestinationBucketEncryptionSseS3Args()
                         # )
                     )
                 ),
@@ -421,19 +426,24 @@ class S3(pulumi.ComponentResource):
                 )
             )
 
-        # Standard Bucket Policy Attachments
-        # Allow ELB Logs
-
         # I don't yet fully understand how Pulumi Outputs work or how to reference them in other resources
         # For now this seems to work fine
         self.bucket_name = Output.concat(self.s3_bucket.id, "")
         self.all_bucket_objects_arn = Output.concat("arn:aws:s3:::", self.s3_bucket.id, "/*")
         self.bucket_arn = Output.concat("arn:aws:s3:::", self.s3_bucket.id)
 
+        # Get Current Account ID
+        self.current = aws.get_caller_identity()
+        self.region = aws.get_region()
+
+        # Standard Bucket Policy Attachments
+
+        # Allow ELB Logs
         if args.bucket_elb_logging:
-            self.elb_logging_policy = aws.iam.get_policy_document(
+            self.get_elb_logging_policy = aws.iam.get_policy_document(
                 statements=[
                     aws.iam.GetPolicyDocumentStatementArgs(
+                        sid="AWSELBLogDelivery",
                         principals=[
                             aws.iam.GetPolicyDocumentStatementPrincipalArgs(
                                 type="AWS",
@@ -452,13 +462,111 @@ class S3(pulumi.ComponentResource):
                 ]
             )
 
+        # Allow VPC Flow Logging
+        if args.bucket_vpc_flow_logging:
+            self.get_vpc_flow_logging_policy = aws.iam.get_policy_document(
+                statements=[
+                    aws.iam.GetPolicyDocumentStatementArgs(
+                        sid="AWSLogDeliveryWrite",
+                        principals=[
+                            aws.iam.GetPolicyDocumentStatementPrincipalArgs(
+                                type="Service",
+                                identifiers=[
+                                    "delivery.logs.amazonaws.com"
+                                ]
+                            )
+                        ],
+                        actions=[
+                            "s3:PutObject"
+                        ],
+                        resources=[
+                            self.all_bucket_objects_arn
+                        ],
+                        conditions=[
+                            aws.iam.GetPolicyDocumentStatementConditionArgs(
+                                test="StringEquals",
+                                values=[self.current.account_id],
+                                variable="aws:SourceAccount"
+                            ),
+                            aws.iam.GetPolicyDocumentStatementConditionArgs(
+                                test="ArnLike",
+                                values=[f"arn:aws:logs:{self.region.name}:{self.current.account_id}:*"],
+                                variable="aws:SourceArn"
+                            )
+                        ],
+                    ),
+                    aws.iam.GetPolicyDocumentStatementArgs(
+                        sid="AWSLogDeliveryAclCheck",
+                        principals=[
+                            aws.iam.GetPolicyDocumentStatementPrincipalArgs(
+                                type="Service",
+                                identifiers=[
+                                    "delivery.logs.amazonaws.com"
+                                ]
+                            )
+                        ],
+                        actions=[
+                            "s3:GetBucketAcl"
+                        ],
+                        resources=[
+                            self.bucket_arn
+                        ],
+                        conditions=[
+                            aws.iam.GetPolicyDocumentStatementConditionArgs(
+                                test="StringEquals",
+                                values=[self.current.account_id],
+                                variable="aws:SourceAccount"
+                            ),
+                            aws.iam.GetPolicyDocumentStatementConditionArgs(
+                                test="ArnLike",
+                                values=[f"arn:aws:logs:{self.region.name}:{self.current.account_id}:*"],
+                                variable="aws:SourceArn"
+                            )
+                        ]
+                    )
+                ]
+            )
+
+        if args.deny_insecure_transport:
+            self.get_deny_insecure_transport_policy = aws.iam.get_policy_document(
+                statements=[
+                    aws.iam.GetPolicyDocumentStatementArgs(
+                        sid="DenyInsecureTransport",
+                        principals=[
+                            aws.iam.GetPolicyDocumentStatementPrincipalArgs(
+                                type="*",
+                                identifiers=["*"]
+                            )
+                        ],
+                        effect="Deny",
+                        actions=[
+                            "s3:*"
+                        ],
+                        resources=[
+                            self.bucket_arn,
+                            self.all_bucket_objects_arn
+                        ],
+                        conditions=[
+                            aws.iam.GetPolicyDocumentStatementConditionArgs(
+                                test="Bool",
+                                values=["false"],
+                                variable="aws:SecureTransport"
+                            )
+                        ]
+                    )
+                ]
+            )
+
         if args.bucket_policy_configuration is not None:
             self.combined_bucket_policy_docs = aws.iam.get_policy_document_output(
                 source_policy_documents=[
                     args.bucket_policy_configuration[0].get('policy_json', ""),
-                    self.elb_logging_policy.json,
+                    self.get_elb_logging_policy.json if args.bucket_elb_logging else "",
+                    self.get_vpc_flow_logging_policy.json if args.bucket_vpc_flow_logging else "",
+                    self.get_deny_insecure_transport_policy.json if args.deny_insecure_transport else ""
                 ]
             )
+
 
         # Policy
         if args.bucket_policy_configuration is not None:
