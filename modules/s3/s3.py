@@ -34,6 +34,7 @@ class S3Args:
                  bucket_elb_logging: bool = False,
                  bucket_vpc_flow_logging: bool = False,
                  deny_insecure_transport: bool = False,
+                 inventory_destination_bucket: bool = False,
                  intelligent_tiering_configuration: list = None,
                  object_ownership: str = None,
                  replication_configuration: list = None,
@@ -111,6 +112,7 @@ class S3Args:
 
         # Inventory
         self.inventory_configuration = inventory_configuration
+        self.inventory_destination_bucket = inventory_destination_bucket
 
 class S3(pulumi.ComponentResource):
 
@@ -135,6 +137,16 @@ class S3(pulumi.ComponentResource):
             opts=pulumi.ResourceOptions(
                 parent=self,
             ))
+
+        # I don't yet fully understand how Pulumi Outputs work or how to reference them in other resources
+        # For now this seems to work fine
+        self.bucket_name = Output.concat(self.s3_bucket.id, "")
+        self.all_bucket_objects_arn = Output.concat("arn:aws:s3:::", self.s3_bucket.id, "/*")
+        self.bucket_arn = Output.concat("arn:aws:s3:::", self.s3_bucket.id)
+
+        # Get Current Account ID
+        self.current = aws.get_caller_identity()
+        self.region = aws.get_region()
 
         # Bucket ACL
         if args.acl is not None:
@@ -383,6 +395,50 @@ class S3(pulumi.ComponentResource):
                 )
             )
 
+        if args.inventory_destination_bucket:
+            self.get_inventory_destination_policy = aws.iam.get_policy_document(
+                statement=[
+                    aws.iam.GetPolicyDocumentStatementArgs(
+                        sid="DestinationInventoryPolicy",
+                        principal=[
+                            aws.iam.GetPolicyDocumentStatementPrincipalArgs(
+                                type="Service",
+                                identifiers=[
+                                    "s3.amazonaws.com"
+                                ]
+                            )
+                        ],
+                        actions=[
+                            "s3:PutObject"
+                        ],
+                        resources=[
+                            self.s3_bucket.all_bucket_objects_arn
+                        ],
+                        conditions=[
+                            aws.iam.GetPolicyDocumentStatementConditionArgs(
+                                test="ArnLike",
+                                values=[
+                                    args.bucket_policy_configuration[0].get('inventory_source_bucket_arn', None)
+                                ],
+                                variable="aws:SourceArn"
+                            ),
+                            aws.iam.GetPolicyDocumentStatementConditionArgs(
+                                test="StringEquals",
+                                values=[
+                                    args.bucket_policy_configuration[0].get('inventory_source_account_id', self.current.account_id)
+                                ],
+                                variable="aws:SourceAccount"
+                            ),
+                            aws.iam.GetPolicyDocumentStatementConditionArgs(
+                                test="StringEquals",
+                                values=["bucket-owner-full-control"],
+                                variable="s3:x-amz-acl"
+                            )
+                        ]
+                    )
+                ]
+            )
+
         if args.inventory_configuration is not None:
             for k in range(len(args.inventory_configuration)):
                 self.inventory = s3.Inventory(
@@ -390,7 +446,7 @@ class S3(pulumi.ComponentResource):
                     bucket=args.inventory_configuration[k].get('source', self.s3_bucket.id),
                     destination=s3.InventoryDestinationArgs(
                         bucket=s3.InventoryDestinationBucketArgs(
-                            bucket_arn=args.inventory_configuration[k].get('destination', self.s3_bucket.arn),
+                            bucket_arn=args.inventory_configuration[k].get('destination_bucket_arn', self.s3_bucket.arn),
                             format=args.inventory_configuration[k].get('destination_format', None),
                             account_id=args.inventory_configuration[k].get('destination_account_id', None),
                             encryption=s3.InventoryDestinationBucketEncryptionArgs(
@@ -417,16 +473,6 @@ class S3(pulumi.ComponentResource):
                         parent=self
                     )
                 )
-
-        # I don't yet fully understand how Pulumi Outputs work or how to reference them in other resources
-        # For now this seems to work fine
-        self.bucket_name = Output.concat(self.s3_bucket.id, "")
-        self.all_bucket_objects_arn = Output.concat("arn:aws:s3:::", self.s3_bucket.id, "/*")
-        self.bucket_arn = Output.concat("arn:aws:s3:::", self.s3_bucket.id)
-
-        # Get Current Account ID
-        self.current = aws.get_caller_identity()
-        self.region = aws.get_region()
 
         # Standard Bucket Policy Attachments
 
@@ -555,7 +601,8 @@ class S3(pulumi.ComponentResource):
                     args.bucket_policy_configuration[0].get('policy_json', ""),
                     self.get_elb_logging_policy.json if args.bucket_elb_logging else "",
                     self.get_vpc_flow_logging_policy.json if args.bucket_vpc_flow_logging else "",
-                    self.get_deny_insecure_transport_policy.json if args.deny_insecure_transport else ""
+                    self.get_deny_insecure_transport_policy.json if args.deny_insecure_transport else "",
+                    self.get_inventory_destination_policy if args.inventory_destination_bucket else ""
                 ]
             )
 

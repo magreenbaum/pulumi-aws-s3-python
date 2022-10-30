@@ -44,6 +44,24 @@ s3_logging_bucket = S3("s3-logging-bucket", S3Args(
     force_destroy=True
 ))
 
+# I'm still figuring this part out
+# There's some dependency issues with my example where destination depends on source
+# But also source depends on destination
+# One of the ARNs will need to be hardcoded more than likely 
+# s3_inventory_destination_bucket = S3("s3-inventory-destination", S3Args(
+#     bucket_prefix="inventory-destination-pulumi-s3-",
+#     acl="private",
+#     tags={
+#         "Owner": "Melissa"
+#     },
+#     sse_algorithm="aws:kms",
+#     kms_key_id=key.arn,
+#     inventory_destination_bucket = True,
+#     bucket_policy_configuration=[
+#         "inventory_source_bucket_arn": s3_bucket.arn
+#     ]
+# ))
+
 s3_bucket = S3("pulumi-s3", S3Args(
     bucket_prefix="test-pulumi-s3-",
     acl="private",
@@ -137,7 +155,8 @@ s3_bucket = S3("pulumi-s3", S3Args(
             "destination_format": "CSV",
             "encryption": {
                 "sse_kms_key_id": key.arn
-            }
+            },
+            "destination_bucket_arn": s3_inventory_destination_bucket.bucket_arn
         }
     ]
 ))
